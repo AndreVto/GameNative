@@ -15,6 +15,8 @@ import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.hardware.input.InputManager
+import android.view.InputDevice
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -352,6 +354,10 @@ fun XServerScreen(
     var showQuickMenu by remember { mutableStateOf(false) }
     var hasPhysicalController by remember { mutableStateOf(false) }
     var keepPausedForEditor by remember { mutableStateOf(false) }
+    var hasPhysicalKeyboard by remember { mutableStateOf(false) }
+    var hasPhysicalMouse by remember { mutableStateOf(false) }
+    var hasInternalTouchpad by remember { mutableStateOf(false) }
+    var hasUpdatedScreenGamepad by remember { mutableStateOf(false) }
     var performanceHudView by remember { mutableStateOf<PerformanceHudView?>(null) }
     var performanceHudHost by remember { mutableStateOf<FrameLayout?>(null) }
 
@@ -508,6 +514,120 @@ fun XServerScreen(
                 synchronized(lock) {
                     pendingSnapshot = null
                 }
+            }
+        }
+    }
+
+    val tryCapturePointer: () -> Boolean = {
+        // Only recapture when we have a physical mouse plugged in (or internal touchpad),
+        // no menus are open and we're not in Touchscreen mode
+        if ((hasPhysicalMouse || hasInternalTouchpad) &&
+            !showElementEditor && !keepPausedForEditor && !showQuickMenu && !isEditMode &&
+            !container.isTouchscreenMode) {
+            PluviaApp.touchpadView?.postDelayed({
+                val view = PluviaApp.touchpadView
+                if (view != null) {
+                    view.requestFocus()
+                    view.requestPointerCapture()
+                }
+            }, 100)
+            true
+        } else {
+            false
+        }
+    }
+
+    fun scanForExternalDevices() {
+        val deviceIds = InputDevice.getDeviceIds()
+        hasPhysicalKeyboard = deviceIds.any { id ->
+            val device = InputDevice.getDevice(id) ?: return@any false
+            val isExternal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) device.isExternal else true
+            Keyboard.isKeyboardDevice(device) && !device.isVirtual && isExternal
+        }
+        hasPhysicalMouse = deviceIds.any { id ->
+            val device = InputDevice.getDevice(id) ?: return@any false
+            val isMouse = device.supportsSource(InputDevice.SOURCE_MOUSE) || device.supportsSource(InputDevice.SOURCE_MOUSE_RELATIVE)
+            val isExternal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) device.isExternal else true
+            isMouse && !device.isVirtual && isExternal
+        }
+        val controllerManager = ControllerManager.getInstance()
+        controllerManager.scanForDevices()
+        hasPhysicalController = controllerManager.getDetectedDevices().isNotEmpty()
+
+        if (!hasInternalTouchpad && !hasPhysicalMouse && !hasPhysicalKeyboard && !hasPhysicalController &&
+            !container.isTouchscreenMode) {
+            val manager = PluviaApp.inputControlsManager
+            val profiles = manager?.getProfiles(false) ?: listOf()
+
+            if (profiles.isNotEmpty()) {
+                // Use current profile (custom or Profile 0)
+                val profileIdStr = container.getExtra("profileId", "0")
+                val profileId = profileIdStr.toIntOrNull() ?: 0
+                val targetProfile = if (profileId != 0) {
+                    manager?.getProfile(profileId)
+                } else {
+                    null
+                } ?: manager?.getProfile(0) ?: profiles.getOrNull(2) ?: profiles.first()
+
+                if (!showElementEditor && !keepPausedForEditor && !showQuickMenu && !isEditMode) {
+                    Timber.d("No external devices attached, showing on-screen controls")
+                    if (!areControlsVisible) {
+                        showInputControls(targetProfile, xServerView!!.getxServer().winHandler, container)
+                        areControlsVisible = true
+                    }
+
+                    PluviaApp.touchpadView?.postDelayed({
+                        val view = PluviaApp.touchpadView
+                        if (view != null) {
+                            // Delay technically not required for the function to work but this can
+                            // race against tryCapturePointer() and end up capturing after release
+                            // was already called
+                            view.releasePointerCapture()
+                        }
+                    }, 100)
+                }
+                hasUpdatedScreenGamepad = false
+            }
+        }
+    }
+
+    fun evaluateDevice(device: InputDevice) {
+        // Some devices advertise all its capabilities on onInputDeviceAdded callback
+        // but some can also do basic advertise on onInputDeviceAdded and only expand on onInputDeviceChanged
+        val isExternal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) device.isExternal else true
+        if (!device.isVirtual && isExternal) {
+            if (Keyboard.isKeyboardDevice(device)) {
+                hasPhysicalKeyboard = true
+                if (!showElementEditor && !keepPausedForEditor && !showQuickMenu && !isEditMode &&
+                    !container.isTouchscreenMode &&
+                    !hasUpdatedScreenGamepad) {
+                    hasUpdatedScreenGamepad = true
+
+                    hideInputControls()
+                    areControlsVisible = false
+                }
+            }
+            val isMouse = device.supportsSource(InputDevice.SOURCE_MOUSE) ||
+                    device.supportsSource(InputDevice.SOURCE_MOUSE_RELATIVE)
+            if (isMouse) {
+                hasPhysicalMouse = true
+                if (!hasUpdatedScreenGamepad && tryCapturePointer()) {
+                    hasUpdatedScreenGamepad = true
+
+                    hideInputControls()
+                    areControlsVisible = false
+                }
+            }
+        }
+        val isGamepad = ExternalController.isGameController(device)
+        if (isGamepad) {
+            if (!showElementEditor && !keepPausedForEditor && !showQuickMenu && !isEditMode &&
+                !container.isTouchscreenMode &&
+                !hasUpdatedScreenGamepad) {
+                hasUpdatedScreenGamepad = true
+
+                hideInputControls()
+                areControlsVisible = false
             }
         }
     }
@@ -719,8 +839,46 @@ fun XServerScreen(
         val controllerManager = ControllerManager.getInstance()
         controllerManager.scanForDevices()
         hasPhysicalController = controllerManager.getDetectedDevices().isNotEmpty()
+        PluviaApp.touchpadView?.postDelayed({
+            val view = PluviaApp.touchpadView
+            if (view != null) {
+                // Delay technically not required for the function to work but this can
+                // race against tryCapturePointer() and end up capturing after release
+                // was already called
+                view.releasePointerCapture()
+            }
+        }, 100)
 
         showQuickMenu = true
+    }
+
+    DisposableEffect(Unit) {
+        val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
+
+        val deviceListener = object : InputManager.InputDeviceListener {
+            override fun onInputDeviceAdded(deviceId: Int) {
+                val device = InputDevice.getDevice(deviceId) ?: return
+                evaluateDevice(device)
+            }
+
+            override fun onInputDeviceRemoved(deviceId: Int) {
+                // Re-scan since we don't know which type was removed
+                scanForExternalDevices()
+            }
+
+            override fun onInputDeviceChanged(deviceId: Int) {
+                scanForExternalDevices()
+                val device = InputDevice.getDevice(deviceId) ?: return
+                evaluateDevice(device)
+            }
+        }
+
+        inputManager.registerInputDeviceListener(deviceListener, null)
+        scanForExternalDevices()
+
+        onDispose {
+            inputManager.unregisterInputDeviceListener(deviceListener)
+        }
     }
 
     DisposableEffect(container) {
@@ -797,8 +955,26 @@ fun XServerScreen(
                     // Final fallback to WinHandler passthrough
                     if (!handled) handled = xServerView!!.getxServer().winHandler.onGenericMotionEvent(it.event)
                 }
-                if (!handled) {
-                    handled = PluviaApp.touchpadView?.onExternalMouseEvent(it.event) == true
+                if (PluviaApp.touchpadView?.hasPointerCapture() != true) {
+                    if (it.event != null) {
+                        val device = it.event.device
+                        val isExternal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) device.isExternal else true
+                        if (device.supportsSource(InputDevice.SOURCE_TOUCHPAD) &&
+                            !isExternal) {
+                            // Samsung DeX Touchpad app
+                            hasInternalTouchpad = true
+                        }
+                        tryCapturePointer()
+                    }
+                }
+                if ((hasInternalTouchpad || hasPhysicalMouse || hasPhysicalKeyboard || isGamepad) &&
+                    !showElementEditor && !keepPausedForEditor && !showQuickMenu && !isEditMode &&
+                    !hasUpdatedScreenGamepad) {
+                    // Hide UI once, if the user wants to re-enable while having input devices on they can
+                    hasUpdatedScreenGamepad = true
+
+                    hideInputControls()
+                    areControlsVisible = false
                 }
                 handled
             }
@@ -839,7 +1015,7 @@ fun XServerScreen(
         AndroidView(
         modifier = Modifier
             .fillMaxSize()
-            .pointerHoverIcon(PointerIcon(0))
+            .pointerHoverIcon(PointerIcon.Default)
             .pointerInteropFilter { event ->
                 val overlayHandled = swapInputOverlay
                     ?.takeIf { it.visibility == View.VISIBLE }
@@ -1323,10 +1499,12 @@ fun XServerScreen(
                         // Determine if controls should be shown based on priority:
                         // 1. If touchscreen mode is true → always hide
                         // 2. Else if physical controller detected → hide
-                        // 3. Else → show
+                        // 3. Else if physical mouse/keyboard detected → hide
+                        // 4. Else → show
                         val shouldShowControls = when {
                             container.isTouchscreenMode -> false
                             hasPhysicalController -> false
+                            hasPhysicalKeyboard || hasPhysicalMouse -> false
                             else -> true
                         }
 
