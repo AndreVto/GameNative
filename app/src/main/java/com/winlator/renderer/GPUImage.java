@@ -41,9 +41,14 @@ public class GPUImage extends Texture {
         }
     }
 
+    private boolean needsRBSwap = false;
+
     public GPUImage(int socketFd) {
         hardwareBufferPtr = hardwareBufferFromSocket(socketFd);
         if (hardwareBufferPtr != 0) {
+            // Check if bit 0 is set (indicates B8G8R8A8 format needs R/B swap)
+            needsRBSwap = (hardwareBufferPtr & 1) != 0;
+            hardwareBufferPtr = hardwareBufferPtr & ~1L; // Clear the flag bit
             virtualData = lockHardwareBuffer(hardwareBufferPtr);
             width = nativeGetWidth(hardwareBufferPtr);
             height = nativeGetHeight(hardwareBufferPtr);
@@ -55,6 +60,10 @@ public class GPUImage extends Texture {
         } else {
             System.err.println("Error: Failed to create hardware buffer");
         }
+    }
+
+    public boolean needsRBSwap() {
+        return needsRBSwap;
     }
 
     @Override

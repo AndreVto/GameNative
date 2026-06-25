@@ -208,7 +208,25 @@ Java_com_winlator_renderer_GPUImage_hardwareBufferFromSocket(
 
     dump_ahb_usage(desc.usage);
 
+    // Check if incoming buffer is B8G8R8A8 (format value 5)
+    // If so, we need to swap R/B when displaying
+    // Android NDK defines: AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM = 5
+    //                    AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM = 1
+    if (desc.format == AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM) { // AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM
+        LOGD("RemoteAHB: Detected B8G8R8A8 format (value=5), will apply R/B swap");
+        // Store format info by encoding it in the pointer (bit 0 set = needs swap)
+        return (jlong)(uintptr_t)ahb | 1;
+    }
+
+    LOGD("RemoteAHB: Format is not B8G8R8A8 (value=%u), no swap needed", desc.format);
     return (jlong)(uintptr_t)ahb;
+}
+
+// Helper to swap R/B channels in a pixel (BGR -> RGB conversion)
+static inline uint32_t swapRB(uint32_t pixel) {
+    return ((pixel & 0xFF00FF00) |        // Keep G and A
+            ((pixel & 0x00FF0000) >> 16) | // Move B to R position
+            ((pixel & 0x000000FF) << 16)); // Move R to B position
 }
 
 JNIEXPORT jint JNICALL
@@ -230,11 +248,12 @@ Java_com_winlator_renderer_GPUImage_copyHardwareBuffer(
         AHardwareBuffer_describe(dstAhb, &desc);
         uint32_t dstStride = desc.stride;
 
-        if (dstStride == (uint32_t)srcStride) {
-            memcpy(dstAddr, srcAddr, (size_t)dstStride * height * 4);
-        } else {
-            for (int y = 0; y < height; y++) {
-                memcpy(dstAddr + y * dstStride, srcAddr + y * srcStride, width * 4);
+        // Copy with R/B swap (X11 data is BGR, destination is RGBA)
+        for (int y = 0; y < height; y++) {
+            uint32_t* srcRow = srcAddr + y * srcStride;
+            uint32_t* dstRow = dstAddr + y * dstStride;
+            for (int x = 0; x < width; x++) {
+                dstRow[x] = swapRB(srcRow[x]);
             }
         }
 

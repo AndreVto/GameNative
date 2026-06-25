@@ -133,7 +133,7 @@ public class ASurfaceRenderer implements WindowManager.OnWindowModificationListe
     private native void nativeInitScanout();
     private native boolean nativeReattachSurface(Surface surface);
     private native void nativeDestroyScanout();
-    private native void nativeSetWindowBuffer(long contentId, long ahbPtr, int fenceFd, long windowId, long serial, GPUImage gpuimage, int slot);
+    private native void nativeSetWindowBuffer(long contentId, long ahbPtr, int fenceFd, long windowId, long serial, GPUImage gpuimage, int slot, boolean needsRBSwap);
     private native void nativeScanoutSetCursorVisibility(boolean visible);
     private native void nativeRegisterWindowSC(long contentId, String debugName);
     private native void nativeUnregisterWindowSC(long contentId);
@@ -446,7 +446,7 @@ public class ASurfaceRenderer implements WindowManager.OnWindowModificationListe
                 long ahbPtr = g.getScanoutHardwareBufferPtr();
                 if (ahbPtr != 0) {
                     int acquireFence = g.consumeAcquireFence();
-                    nativeSetWindowBuffer(windowId, ahbPtr, acquireFence, 0, 0, g, g.getLastUsedSlot());
+                    nativeSetWindowBuffer(windowId, ahbPtr, acquireFence, 0, 0, g, g.getLastUsedSlot(), false);
                     if (hudRef != null) hudRef.update();
                 }
             }
@@ -465,7 +465,7 @@ public class ASurfaceRenderer implements WindowManager.OnWindowModificationListe
             if (drawable.getTexture() instanceof GPUImage g) {
                 long ahbPtr = g.getHardwareBufferPtr();
                 if (ahbPtr != 0) {
-                    nativeSetWindowBuffer(windowId, ahbPtr, -1, windowId, xSerial, null, -1);
+                    nativeSetWindowBuffer(windowId, ahbPtr, -1, windowId, xSerial, null, -1, g.needsRBSwap());
                     if (hudRef != null) hudRef.update();
                 }
             }
