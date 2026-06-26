@@ -51,7 +51,7 @@ static void bufferReleaseCallback(void* context, int release_fence_fd) {
         return;
     }
 
-    if (ctx->gpuImageRef && ctx->setSwapchainFenceId) {
+    if (ctx->ahbImageRef && ctx->setSwapchainFenceId) {
         JNIEnv* env = nullptr;
         bool attached = false;
         if (ctx->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
@@ -60,11 +60,11 @@ static void bufferReleaseCallback(void* context, int release_fence_fd) {
         }
 
         if (env) {
-            env->CallVoidMethod(ctx->gpuImageRef, ctx->setSwapchainFenceId, ctx->slot, release_fence_fd);
+            env->CallVoidMethod(ctx->ahbImageRef, ctx->setSwapchainFenceId, ctx->slot, release_fence_fd);
             if (env->ExceptionCheck()) {
                 env->ExceptionClear();
             }
-            env->DeleteGlobalRef(ctx->gpuImageRef);
+            env->DeleteGlobalRef(ctx->ahbImageRef);
         } else if (release_fence_fd >= 0) {
             close(release_fence_fd);
         }
@@ -304,7 +304,7 @@ static inline uint32_t swapRB(uint32_t pixel) {
             ((pixel & 0x000000FF) << 16)); // Move R to B position
 }
 
-void ASurfaceRendererContext::setWindowBuffer(JNIEnv* env, int64_t contentId, AHardwareBuffer* ahb, int fenceFd, int64_t windowId, int64_t serial, jobject gpuImage, int slot, bool needsRBSwap) {
+void ASurfaceRendererContext::setWindowBuffer(JNIEnv* env, int64_t contentId, AHardwareBuffer* ahb, int fenceFd, int64_t windowId, int64_t serial, jobject ahbImage, int slot, bool needsRBSwap) {
     if (!ahb) { if (fenceFd >= 0) close(fenceFd); return; }
 
     AHardwareBuffer* finalAhb = ahb;
@@ -322,11 +322,11 @@ void ASurfaceRendererContext::setWindowBuffer(JNIEnv* env, int64_t contentId, AH
         if (srcDesc.format == AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM) {
             // B8G8R8A8 format - always swap
             needsRBSwap = true;
-        } else if (srcDesc.format == 1 && gpuImage == nullptr) {
+        } else if (srcDesc.format == 1 && ahbImage == nullptr) {
             // R8G8B8A8 format from GPU (Vulkan/GL) - swap because data is in BGR order
             needsRBSwap = true;
         }
-        // CPU buffers (gpuImage != null) with R8G8B8A8 format are already correct
+        // CPU buffers (ahbImage != null) with R8G8B8A8 format are already correct
     }
 
     // If incoming buffer needs R/B swap, convert it
@@ -381,11 +381,11 @@ void ASurfaceRendererContext::setWindowBuffer(JNIEnv* env, int64_t contentId, AH
     }
     void* tx = ST_CREATE();
     BufferReleaseCtx* relCtx = nullptr;
-    if (fnSTSetBufferWithRelease && gpuImage && slot >= 0) {
+    if (fnSTSetBufferWithRelease && ahbImage && slot >= 0) {
         relCtx = new BufferReleaseCtx();
         relCtx->vm = javaVm;
-        relCtx->gpuImageRef = env->NewGlobalRef(gpuImage);
-        jclass cls = env->GetObjectClass(gpuImage);
+        relCtx->ahbImageRef = env->NewGlobalRef(ahbImage);
+        jclass cls = env->GetObjectClass(ahbImage);
         relCtx->setSwapchainFenceId = env->GetMethodID(cls, "setSwapchainFence", "(II)V");
         env->DeleteLocalRef(cls);
         relCtx->slot = slot;

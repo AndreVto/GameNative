@@ -183,7 +183,7 @@ static void dump_ahb_usage(uint64_t usage)
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_winlator_renderer_GPUImage_hardwareBufferFromSocket(
+Java_com_winlator_renderer_AHBImage_hardwareBufferFromSocket(
         JNIEnv *env, jobject obj, jint fd)
 {
     uint8_t ready = 1;
@@ -230,7 +230,7 @@ static inline uint32_t swapRB(uint32_t pixel) {
 }
 
 JNIEXPORT jint JNICALL
-Java_com_winlator_renderer_GPUImage_copyHardwareBuffer(
+Java_com_winlator_renderer_AHBImage_copyHardwareBuffer(
         JNIEnv *env, jobject obj, jobject srcBuffer, jlong dstPtr, jshort width, jshort height, jshort srcStride, jint waitFence)
 {
     uint32_t* srcAddr = (uint32_t*)(*env)->GetDirectBufferAddress(env, srcBuffer);
@@ -269,7 +269,7 @@ Java_com_winlator_renderer_GPUImage_copyHardwareBuffer(
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_winlator_renderer_GPUImage_createHardwareBuffer(
+Java_com_winlator_renderer_AHBImage_createHardwareBuffer(
         JNIEnv *env, jobject obj, jshort width, jshort height)
 {
     AHardwareBuffer_Desc desc;
@@ -305,7 +305,7 @@ Java_com_winlator_renderer_GPUImage_createHardwareBuffer(
 }
 
 JNIEXPORT void JNICALL
-Java_com_winlator_renderer_GPUImage_destroyHardwareBuffer(
+Java_com_winlator_renderer_AHBImage_destroyHardwareBuffer(
         JNIEnv *env, jobject obj, jlong ptr)
 {
     AHardwareBuffer *ahb = (AHardwareBuffer *)(uintptr_t)ptr;
@@ -316,7 +316,7 @@ Java_com_winlator_renderer_GPUImage_destroyHardwareBuffer(
 }
 
 JNIEXPORT jint JNICALL
-Java_com_winlator_renderer_GPUImage_unlockHardwareBuffer(
+Java_com_winlator_renderer_AHBImage_unlockHardwareBuffer(
         JNIEnv *env, jobject obj, jlong ptr)
 {
     AHardwareBuffer *ahb = (AHardwareBuffer *)(uintptr_t)ptr;
@@ -332,7 +332,7 @@ Java_com_winlator_renderer_GPUImage_unlockHardwareBuffer(
 }
 
 JNIEXPORT jobject JNICALL
-Java_com_winlator_renderer_GPUImage_lockHardwareBuffer(
+Java_com_winlator_renderer_AHBImage_lockHardwareBuffer(
         JNIEnv *env, jobject obj, jlong ptr)
 {
     AHardwareBuffer* hardwareBuffer = (AHardwareBuffer*)ptr;
@@ -376,7 +376,7 @@ Java_com_winlator_renderer_GPUImage_lockHardwareBuffer(
 }
 
 JNIEXPORT jshort JNICALL
-Java_com_winlator_renderer_GPUImage_getStride(
+Java_com_winlator_renderer_AHBImage_getStride(
         JNIEnv *env, jobject obj, jlong ptr)
 {
     AHardwareBuffer *ahb = (AHardwareBuffer *)(uintptr_t)ptr;
@@ -388,7 +388,7 @@ Java_com_winlator_renderer_GPUImage_getStride(
 }
 
 JNIEXPORT jshort JNICALL
-Java_com_winlator_renderer_GPUImage_nativeGetWidth(
+Java_com_winlator_renderer_AHBImage_nativeGetWidth(
         JNIEnv *env, jobject obj, jlong ptr)
 {
     AHardwareBuffer *ahb = (AHardwareBuffer *)(uintptr_t)ptr;
@@ -400,7 +400,7 @@ Java_com_winlator_renderer_GPUImage_nativeGetWidth(
 }
 
 JNIEXPORT jshort JNICALL
-Java_com_winlator_renderer_GPUImage_nativeGetHeight(
+Java_com_winlator_renderer_AHBImage_nativeGetHeight(
         JNIEnv *env, jobject obj, jlong ptr)
 {
     AHardwareBuffer *ahb = (AHardwareBuffer *)(uintptr_t)ptr;
@@ -412,7 +412,7 @@ Java_com_winlator_renderer_GPUImage_nativeGetHeight(
 }
 
 JNIEXPORT void JNICALL
-Java_com_winlator_renderer_GPUImage_destroyImageKHR(JNIEnv *env, jclass obj, jlong imageKHRPtr) {
+Java_com_winlator_renderer_AHBImage_destroyImageKHR(JNIEnv *env, jclass obj, jlong imageKHRPtr) {
     EGLImageKHR imageKHR = (EGLImageKHR)imageKHRPtr;
     if (imageKHR) {
         EGLDisplay eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -422,7 +422,7 @@ Java_com_winlator_renderer_GPUImage_destroyImageKHR(JNIEnv *env, jclass obj, jlo
 
 // JNI method to create an EGL image
 JNIEXPORT jlong JNICALL
-Java_com_winlator_renderer_GPUImage_createImageKHR(JNIEnv *env, jclass obj, jlong hardwareBufferPtr, jint textureId) {
+Java_com_winlator_renderer_AHBImage_createImageKHR(JNIEnv *env, jclass obj, jlong hardwareBufferPtr, jint textureId) {
     AHardwareBuffer* hardwareBuffer = (AHardwareBuffer*)hardwareBufferPtr;
     if (!hardwareBuffer) {
         LOGE("Invalid AHardwareBuffer pointer\n");
@@ -432,6 +432,6 @@ Java_com_winlator_renderer_GPUImage_createImageKHR(JNIEnv *env, jclass obj, jlon
 }
 
 JNIEXPORT void JNICALL
-Java_com_winlator_renderer_GPUImage_nativeCloseFd(JNIEnv *env, jclass clazz, jint fd) {
+Java_com_winlator_renderer_AHBImage_nativeCloseFd(JNIEnv *env, jclass clazz, jint fd) {
     if (fd >= 0) close(fd);
 }

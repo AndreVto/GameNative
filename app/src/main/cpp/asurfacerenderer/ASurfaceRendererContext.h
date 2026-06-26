@@ -28,7 +28,7 @@ struct CallbackTarget {
 
 struct BufferReleaseCtx {
     JavaVM* vm;
-    jobject gpuImageRef;
+    jobject ahbImageRef;
     jmethodID setSwapchainFenceId;
     int slot;
 };
