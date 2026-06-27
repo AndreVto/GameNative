@@ -133,7 +133,7 @@ public class ASurfaceRenderer implements WindowManager.OnWindowModificationListe
     private native void nativeInitScanout();
     private native boolean nativeReattachSurface(Surface surface);
     private native void nativeDestroyScanout();
-    private native void nativeSetWindowBuffer(long contentId, long ahbPtr, int fenceFd, long windowId, long serial, AHBImage ahbImage, int slot, boolean needsRBSwap);
+    private native void nativeSetWindowBuffer(long contentId, long ahbPtr, int fenceFd, long windowId, long serial, AHBImage ahbImage, int slot);
     private native void nativeScanoutSetCursorVisibility(boolean visible);
     private native void nativeRegisterWindowSC(long contentId, String debugName);
     private native void nativeUnregisterWindowSC(long contentId);
@@ -447,7 +447,7 @@ public class ASurfaceRenderer implements WindowManager.OnWindowModificationListe
                 if (ahbPtr != 0) {
                     int acquireFence = g.consumeAcquireFence();
                     // Disable swap R/B in cpu path as it is handled with drawable
-                    nativeSetWindowBuffer(windowId, ahbPtr, acquireFence, 0, 0, g, g.getLastUsedSlot(), false);
+                    nativeSetWindowBuffer(windowId, ahbPtr, acquireFence, 0, 0, g, g.getLastUsedSlot());
                     if (hudRef != null) hudRef.update();
                 }
             }
@@ -466,8 +466,8 @@ public class ASurfaceRenderer implements WindowManager.OnWindowModificationListe
             if (drawable.getTexture() instanceof AHBImage g) {
                 long ahbPtr = g.getHardwareBufferPtr();
                 if (ahbPtr != 0) {
-                    // Need to match drawable needsRBSwap() for swap R/B
-                    nativeSetWindowBuffer(windowId, ahbPtr, -1, windowId, xSerial, null, -1, drawable.needsSwapRB());
+                    // Need to match ahbImage needsRBSwap() for swap R/B
+                    nativeSetWindowBuffer(windowId, ahbPtr, -1, windowId, xSerial, null, -1);
                     if (hudRef != null) hudRef.update();
                 }
             }
